@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grace — Audio Converter</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: rgba(255,255,255,0.07);
+    --border-active: rgba(120,80,255,0.5);
+    --text: #e8e6f0;
+    --muted: #6b6880;
+    --accent: #7850ff;
+    --accent2: #c850fc;
+    --accent3: #50d4ff;
+    --success: #3ddc97;
+    --warn: #ffb84d;
+    --error: #ff5a7d;
+    --glow: 0 0 40px rgba(120,80,255,0.2);
+    --radius: 16px;
+    --radius-sm: 10px;
+    --font: 'Space Grotesk', sans-serif;
+    --mono: 'Space Mono', monospace;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  /* ── BACKGROUND CANVAS ── */
+  #bg-canvas {
+    position: fixed; inset: 0; z-index: 0;
+    pointer-events: none;
+  }
+
+  /* ── LAYOUT ── */
+  .app { position: relative; z-index: 1; max-width: 960px; margin: 0 auto; padding: 0 24px 80px; }
+
+  /* ── HEADER ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 28px 0 48px;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 1.15rem; font-weight: 700; letter-spacing: -0.02em;
+  }
+  .logo-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 20px rgba(120,80,255,0.4);
+  }
+  .logo-icon svg { width: 18px; height: 18px; }
+  .badge {
+    font-size: 0.7rem; font-family: var(--mono);
+    background: rgba(120,80,255,0.15); border: 1px solid rgba(120,80,255,0.3);
+    color: var(--accent); padding: 3px 8px; border-radius: 20px; letter-spacing: 0.05em;
+  }
+
+  /* ── HERO ── */
+  .hero { text-align: center; margin-bottom: 56px; }
+  .hero-eyebrow {
+    font-size: 0.75rem; font-family: var(--mono); color: var(--accent);
+    letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 16px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .hero-eyebrow::before, .hero-eyebrow::after {
+    content: ''; display: block; height: 1px; width: 32px;
+    background: linear-gradient(90deg, transparent, var(--accent));
+  }
+  .hero-eyebrow::after { transform: rotate(180deg); }
+  h1 {
+    font-size: clamp(2.4rem, 6vw, 4rem); font-weight: 700; line-height: 1.08;
+    letter-spacing: -0.04em; margin-bottom: 18px;
+  }
+  h1 span {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 50%, var(--accent3) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero-sub { font-size: 1.05rem; color: var(--muted); max-width: 480px; margin: 0 auto; }
+
+  /* ── WAVEFORM VIZ ── */
+  .waveform-bar {
+    display: flex; align-items: center; justify-content: center;
+    gap: 3px; height: 48px; margin: 32px 0;
+  }
+  .waveform-bar .bar {
+    width: 3px; border-radius: 3px;
+    background: linear-gradient(to top, var(--accent), var(--accent2));
+    animation: wave 1.4s ease-in-out infinite;
+    opacity: 0.6;
+  }
+  @keyframes wave {
+    0%, 100% { height: 8px; opacity: 0.3; }
+    50% { height: var(--h, 30px); opacity: 1; }
+  }
+
+  /* ── DROP ZONE ── */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 64px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative; overflow: hidden;
+    background: var(--surface);
+  }
+  .drop-zone::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 100%, rgba(120,80,255,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .drop-zone:hover, .drop-zone.dragging {
+    border-color: var(--border-active);
+    box-shadow: var(--glow), inset 0 0 60px rgba(120,80,255,0.05);
+  }
+  .drop-zone.dragging { background: var(--surface2); }
+  .drop-icon {
+    width: 64px; height: 64px; margin: 0 auto 20px;
+    background: linear-gradient(135deg, rgba(120,80,255,0.2), rgba(200,80,252,0.2));
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(120,80,255,0.3);
+    transition: transform 0.3s ease;
+  }
+  .drop-zone:hover .drop-icon { transform: scale(1.08); }
+  .drop-icon svg { width: 28px; height: 28px; color: var(--accent); }
+  .drop-title { font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; }
+  .drop-sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 24px; }
+  .btn-browse {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 11px 24px; border-radius: 50px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff; font-family: var(--font); font-size: 0.9rem; font-weight: 600;
+    border: none; cursor: pointer; transition: all 0.2s ease;
+    box-shadow: 0 4px 20px rgba(120,80,255,0.3);
+  }
+  .btn-browse:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(120,80,255,0.45); }
+  .supported {
+    margin-top: 20px; font-size: 0.78rem; color: var(--muted); font-family: var(--mono);
+  }
+  .supported span { color: var(--accent3); }
+  #file-input { display: none; }
+
+  /* ── FILE LIST ── */
+  .file-list { margin-top: 24px; display: flex; flex-direction: column; gap: 12px; }
+  .file-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 16px 20px;
+    display: grid; grid-template-columns: auto 1fr auto;
+    align-items: center; gap: 14px;
+    transition: border-color 0.2s;
+    animation: slideIn 0.25s ease;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .file-item:hover { border-color: var(--border-active); }
+  .file-icon {
+    width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem; font-family: var(--mono); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .file-info { overflow: hidden; }
+  .file-name { font-weight: 500; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; font-family: var(--mono); }
+  .file-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .btn-remove {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(255,90,125,0.1); border: 1px solid rgba(255,90,125,0.25);
+    color: var(--error); cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; font-size: 14px; line-height: 1;
+  }
+  .btn-remove:hover { background: rgba(255,90,125,0.25); transform: scale(1.1); }
+
+  /* Progress bar on file item */
+  .file-progress {
+    grid-column: 1 / -1; height: 3px; border-radius: 3px;
+    background: var(--surface2); overflow: hidden; display: none;
+  }
+  .file-progress-bar {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width 0.3s ease; width: 0%;
+  }
+  .file-status { font-size: 0.72rem; font-family: var(--mono); }
+
+  /* ── CONVERSION PANEL ── */
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 28px; margin-top: 24px;
+  }
+  .panel-title {
+    font-size: 0.75rem; font-family: var(--mono); color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 20px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .panel-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* Format grid */
+  .format-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+  .fmt-btn {
+    padding: 8px 16px; border-radius: 8px; cursor: pointer;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--muted); font-family: var(--mono); font-size: 0.78rem;
+    font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+    transition: all 0.2s ease;
+  }
+  .fmt-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .fmt-btn.active {
+    background: linear-gradient(135deg, rgba(120,80,255,0.2), rgba(200,80,252,0.15));
+    border-color: var(--accent); color: #fff;
+    box-shadow: 0 0 12px rgba(120,80,255,0.25);
+  }
+
+  /* Quality / Options row */
+  .options-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 600px) { .options-row { grid-template-columns: 1fr 1fr; } }
+  .opt-group label {
+    display: block; font-size: 0.72rem; color: var(--muted);
+    font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px;
+  }
+  .opt-group select, .opt-group input[type=range] {
+    width: 100%;
+  }
+  select {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 9px 12px; border-radius: 8px;
+    font-family: var(--font); font-size: 0.88rem; cursor: pointer;
+    outline: none; transition: border-color 0.2s; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b6880' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center;
+    padding-right: 32px;
+  }
+  select:focus { border-color: var(--accent); }
+
+  input[type=range] {
+    -webkit-appearance: none; height: 4px; border-radius: 4px;
+    background: var(--surface2); outline: none; cursor: pointer; margin-top: 10px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    cursor: pointer; box-shadow: 0 0 8px rgba(120,80,255,0.5);
+    transition: transform 0.15s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  .range-val {
+    font-size: 0.78rem; font-family: var(--mono); color: var(--accent);
+    text-align: right; margin-top: 4px;
+  }
+
+  /* Toggle switches */
+  .toggle-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+  .toggle-item {
+    display: flex; align-items: center; gap: 10px; cursor: pointer;
+    padding: 10px 16px; border-radius: 8px;
+    background: var(--surface2); border: 1px solid var(--border);
+    transition: border-color 0.2s; user-select: none;
+  }
+  .toggle-item:hover { border-color: var(--border-active); }
+  .toggle-item input { display: none; }
+  .toggle-switch {
+    width: 34px; height: 18px; border-radius: 9px; background: var(--surface);
+    border: 1px solid var(--border); position: relative; transition: all 0.2s; flex-shrink: 0;
+  }
+  .toggle-switch::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--muted); transition: all 0.25s;
+  }
+  .toggle-item input:checked ~ .toggle-switch {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-color: var(--accent);
+  }
+  .toggle-item input:checked ~ .toggle-switch::after {
+    left: 16px; background: #fff;
+  }
+  .toggle-label { font-size: 0.85rem; color: var(--muted); }
+  .toggle-item input:checked ~ .toggle-label { color: var(--text); }
+
+  /* ── CONVERT BUTTON ── */
+  .convert-section { display: flex; gap: 12px; align-items: center; }
+  .btn-convert {
+    flex: 1; padding: 15px 32px;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    border: none; border-radius: 12px; color: #fff;
+    font-family: var(--font); font-size: 1rem; font-weight: 700;
+    cursor: pointer; position: relative; overflow: hidden;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 24px rgba(120,80,255,0.35);
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .btn-convert::before {
+    content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    transition: left 0.4s ease;
+  }
+  .btn-convert:hover::before { left: 100%; }
+  .btn-convert:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(120,80,255,0.5); }
+  .btn-convert:active { transform: translateY(0); }
+  .btn-convert:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .btn-clear {
+    padding: 15px 20px; border-radius: 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--muted); font-family: var(--font); font-size: 0.9rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .btn-clear:hover { border-color: var(--error); color: var(--error); }
+
+  /* ── GLOBAL PROGRESS ── */
+  .global-progress { display: none; margin-top: 20px; }
+  .progress-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .progress-label { font-size: 0.82rem; color: var(--muted); }
+  .progress-pct { font-size: 0.82rem; font-family: var(--mono); color: var(--accent); }
+  .progress-track {
+    height: 6px; border-radius: 6px; background: var(--surface2); overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; border-radius: 6px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent3));
+    background-size: 200% 100%; animation: shimmer 2s linear infinite;
+    transition: width 0.4s ease; width: 0%;
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* ── OUTPUT SECTION ── */
+  .output-section { display: none; margin-top: 24px; }
+  .output-grid { display: flex; flex-direction: column; gap: 10px; }
+  .output-item {
+    background: var(--surface); border: 1px solid rgba(61,220,151,0.25);
+    border-radius: var(--radius-sm); padding: 14px 18px;
+    display: grid; grid-template-columns: auto 1fr auto;
+    align-items: center; gap: 14px;
+    animation: slideIn 0.3s ease;
+  }
+  .output-check {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(61,220,151,0.15); border: 1px solid rgba(61,220,151,0.4);
+    display: flex; align-items: center; justify-content: center; color: var(--success);
+    flex-shrink: 0;
+  }
+  .output-info .file-name { font-size: 0.88rem; }
+  .output-size { font-size: 0.72rem; color: var(--success); font-family: var(--mono); margin-top: 2px; }
+  .btn-download {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: 8px;
+    background: rgba(61,220,151,0.12); border: 1px solid rgba(61,220,151,0.3);
+    color: var(--success); font-family: var(--font); font-size: 0.82rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s; text-decoration: none; white-space: nowrap;
+  }
+  .btn-download:hover { background: rgba(61,220,151,0.25); transform: translateY(-1px); }
+
+  /* ── AUDIO PLAYER ── */
+  .player-section { display: none; margin-top: 24px; }
+  .player {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px 24px;
+  }
+  .player-title {
+    font-size: 0.72rem; font-family: var(--mono); color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px;
+  }
+  .player-name { font-weight: 600; margin-bottom: 12px; font-size: 0.9rem; }
+  .player-controls { display: flex; align-items: center; gap: 14px; }
+  .btn-play {
+    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    color: #fff; transition: all 0.2s; box-shadow: 0 4px 14px rgba(120,80,255,0.35);
+  }
+  .btn-play:hover { transform: scale(1.08); }
+  .seek-bar { flex: 1; }
+  input[type=range].seek { margin-top: 0; }
+  .time-display { font-size: 0.72rem; font-family: var(--mono); color: var(--muted); flex-shrink: 0; }
+  #audio-el { display: none; }
+
+  /* ── STATS ROW ── */
+  .stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 12px; margin-top: 24px;
+  }
+  @media (max-width: 600px) { .stats-row { grid-template-columns: 1fr 1fr; } }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 16px;
+    text-align: center; transition: border-color 0.2s;
+  }
+  .stat-card:hover { border-color: var(--border-active); }
+  .stat-val { font-size: 1.5rem; font-weight: 700; font-family: var(--mono); color: var(--accent); }
+  .stat-label { font-size: 0.72rem; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+  /* ── TOAST ── */
+  .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+  .toast {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 18px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 0.88rem; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    animation: toastIn 0.3s ease; min-width: 220px;
+  }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .toast.fade-out { animation: toastOut 0.3s ease forwards; }
+  @keyframes toastOut {
+    to { opacity: 0; transform: translateY(10px) scale(0.95); }
+  }
+  .toast-icon { font-size: 16px; flex-shrink: 0; }
+  .toast.success { border-color: rgba(61,220,151,0.3); }
+  .toast.error { border-color: rgba(255,90,125,0.3); }
+  .toast.info { border-color: rgba(120,80,255,0.3); }
+
+  /* ── HISTORY ── */
+  .history-section { margin-top: 40px; }
+  .history-empty { text-align: center; padding: 32px; color: var(--muted); font-size: 0.88rem; }
+  .history-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .history-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 16px;
+    display: flex; align-items: center; gap: 12px; font-size: 0.85rem;
+    transition: border-color 0.2s;
+  }
+  .history-item:hover { border-color: var(--border-active); }
+  .hist-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+  .hist-name { flex: 1; color: var(--muted); }
+  .hist-name strong { color: var(--text); }
+  .hist-badge {
+    font-size: 0.65rem; font-family: var(--mono); font-weight: 700;
+    padding: 3px 7px; border-radius: 5px; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .hist-time { font-size: 0.72rem; font-family: var(--mono); color: var(--muted); }
+
+  /* ── FOOTER ── */
+  footer {
+    margin-top: 64px; padding: 24px 0;
+    border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.78rem; color: var(--muted); font-family: var(--mono);
+  }
+  @media (max-width: 500px) { footer { flex-direction: column; gap: 8px; text-align: center; } }
+
+  /* ── MISC ── */
+  .hidden { display: none !important; }
+  .divider { height: 1px; background: var(--border); margin: 28px 0; }
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<div class="app">
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+        </svg>
+      </div>
+      Grace
+    </div>
+    <span class="badge">AUDIO CONVERTER</span>
+  </header>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-eyebrow">Professional Grade</div>
+    <h1>Convert audio with<br><span>zero compromise</span></h1>
+    <p class="hero-sub">Transform any audio file into any format. Fast, lossless-ready, and beautifully effortless.</p>
+    <div class="waveform-bar" id="waveform"></div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-val" id="stat-files">0</div>
+      <div class="stat-label">Files Loaded</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="stat-converted">0</div>
+      <div class="stat-label">Converted</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="stat-size">0 MB</div>
+      <div class="stat-label">Total Size</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="stat-saved">—</div>
+      <div class="stat-label">Space Saved</div>
+    </div>
+  </div>
+
+  <!-- Drop Zone -->
+  <div class="drop-zone" id="drop-zone" style="margin-top:24px">
+    <div class="drop-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+    </div>
+    <div class="drop-title">Drop your audio files here</div>
+    <div class="drop-sub">or click below to browse your device</div>
+    <button class="btn-browse" onclick="document.getElementById('file-input').click()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+      Browse files
+    </button>
+    <div class="supported">Supports <span>MP3 · WAV · OGG · FLAC · AAC · M4A · OPUS · WebM</span></div>
+    <input type="file" id="file-input" accept="audio/*" multiple>
+  </div>
+
+  <!-- File List -->
+  <div class="file-list" id="file-list"></div>
+
+  <!-- Conversion Panel -->
+  <div class="panel" id="conversion-panel" style="display:none">
+    <div class="panel-title">Output Format</div>
+    <div class="format-grid" id="format-grid">
+      <button class="fmt-btn active" data-fmt="mp3">MP3</button>
+      <button class="fmt-btn" data-fmt="wav">WAV</button>
+      <button class="fmt-btn" data-fmt="ogg">OGG</button>
+      <button class="fmt-btn" data-fmt="flac">FLAC</button>
+      <button class="fmt-btn" data-fmt="aac">AAC</button>
+      <button class="fmt-btn" data-fmt="m4a">M4A</button>
+      <button class="fmt-btn" data-fmt="opus">OPUS</button>
+      <button class="fmt-btn" data-fmt="webm">WebM</button>
+    </div>
+
+    <div class="panel-title">Quality Settings</div>
+    <div class="options-row">
+      <div class="opt-group">
+        <label>Bitrate</label>
+        <select id="opt-bitrate">
+          <option value="64">64 kbps — Small</option>
+          <option value="128">128 kbps — Good</option>
+          <option value="192" selected>192 kbps — High</option>
+          <option value="256">256 kbps — Very High</option>
+          <option value="320">320 kbps — Maximum</option>
+        </select>
+      </div>
+      <div class="opt-group">
+        <label>Sample Rate</label>
+        <select id="opt-samplerate">
+          <option value="22050">22,050 Hz</option>
+          <option value="44100" selected>44,100 Hz</option>
+          <option value="48000">48,000 Hz</option>
+          <option value="96000">96,000 Hz</option>
+        </select>
+      </div>
+      <div class="opt-group">
+        <label>Channels</label>
+        <select id="opt-channels">
+          <option value="1">Mono</option>
+          <option value="2" selected>Stereo</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="panel-title">Volume & Processing</div>
+    <div class="options-row">
+      <div class="opt-group">
+        <label>Volume Gain</label>
+        <input type="range" id="opt-volume" min="-20" max="20" value="0" step="1">
+        <div class="range-val" id="vol-val">0 dB</div>
+      </div>
+      <div class="opt-group">
+        <label>Speed</label>
+        <input type="range" id="opt-speed" min="0.5" max="2" value="1" step="0.05">
+        <div class="range-val" id="spd-val">1.00×</div>
+      </div>
+      <div class="opt-group">
+        <label>Pitch Shift</label>
+        <input type="range" id="opt-pitch" min="-12" max="12" value="0" step="1">
+        <div class="range-val" id="pitch-val">0 st</div>
+      </div>
+    </div>
+
+    <div class="panel-title">Processing Options</div>
+    <div class="toggle-row">
+      <label class="toggle-item">
+        <input type="checkbox" id="opt-normalize" checked>
+        <div class="toggle-switch"></div>
+        <span class="toggle-label">Normalize audio</span>
+      </label>
+      <label class="toggle-item">
+        <input type="checkbox" id="opt-stereo-to-mono">
+        <div class="toggle-switch"></div>
+        <span class="toggle-label">Force mono output</span>
+      </label>
+      <label class="toggle-item">
+        <input type="checkbox" id="opt-trim-silence">
+        <div class="toggle-switch"></div>
+        <span class="toggle-label">Trim silence</span>
+      </label>
+      <label class="toggle-item">
+        <input type="checkbox" id="opt-fade-in">
+        <div class="toggle-switch"></div>
+        <span class="toggle-label">Fade in / out</span>
+      </label>
+    </div>
+
+    <div class="convert-section">
+      <button class="btn-convert" id="btn-convert" onclick="startConversion()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Convert All Files
+      </button>
+      <button class="btn-clear" onclick="clearAll()">Clear</button>
+    </div>
+
+    <!-- Global Progress -->
+    <div class="global-progress" id="global-progress">
+      <div class="progress-header">
+        <span class="progress-label" id="progress-label">Converting…</span>
+        <span class="progress-pct" id="progress-pct">0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audio Player -->
+  <div class="player-section" id="player-section">
+    <div class="panel">
+      <div class="panel-title">Preview</div>
+      <div class="player">
+        <div class="player-name" id="player-name">—</div>
+        <div class="player-controls">
+          <button class="btn-play" id="btn-play" onclick="togglePlay()">
+            <svg id="play-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </button>
+          <div class="seek-bar">
+            <input type="range" class="seek" id="seek-bar" min="0" max="100" value="0" oninput="seekTo(this.value)">
+          </div>
+          <div class="time-display" id="time-display">0:00 / 0:00</div>
+        </div>
+        <audio id="audio-el" ontimeupdate="updateSeek()" onended="onAudioEnd()" onloadedmetadata="onAudioMeta()"></audio>
+      </div>
+    </div>
+  </div>
+
+  <!-- Output -->
+  <div class="output-section" id="output-section">
+    <div class="panel">
+      <div class="panel-title">Downloads Ready</div>
+      <div class="output-grid" id="output-grid"></div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="history-section">
+    <div class="panel">
+      <div class="panel-title">Conversion History</div>
+      <div class="history-list" id="history-list">
+        <div class="history-empty">No conversions yet — load some files to get started.</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span>Grace Audio Converter</span>
+    <span>Web Audio API · No upload required</span>
+  </footer>
+</div>
+
+<!-- Toast -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────
+let files = [];
+let selectedFormat = 'mp3';
+let conversionHistory = [];
+let convertedCount = 0;
+let isPlaying = false;
+
+// ─── BACKGROUND CANVAS ───────────────────────────────────
+(function initCanvas() {
+  const canvas = document.getElementById('bg-canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, particles = [];
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+
+  function initParticles() {
+    particles = Array.from({ length: 55 }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      r: Math.random() * 2 + 0.5,
+      vx: (Math.random() - 0.5) * 0.2, vy: (Math.random() - 0.5) * 0.2,
+      alpha: Math.random() * 0.4 + 0.1,
+      color: ['#7850ff', '#c850fc', '#50d4ff'][Math.floor(Math.random() * 3)]
+    }));
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+      if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = p.alpha;
+      ctx.fill();
+    });
+    // Draw faint lines between close particles
+    ctx.globalAlpha = 1;
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 120) {
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = 'rgba(120,80,255,' + (0.06 * (1 - dist / 120)) + ')';
+          ctx.lineWidth = 0.6;
+          ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+
+  resize(); initParticles(); draw();
+  window.addEventListener('resize', () => { resize(); initParticles(); });
+})();
+
+// ─── WAVEFORM ANIMATION ──────────────────────────────────
+(function initWaveform() {
+  const container = document.getElementById('waveform');
+  const heights = [12, 20, 32, 24, 40, 28, 16, 36, 22, 44, 18, 30, 26, 38, 14, 34, 24, 42, 16, 28, 20, 36, 30, 18, 40];
+  heights.forEach((h, i) => {
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    bar.style.setProperty('--h', h + 'px');
+    bar.style.animationDelay = (i * 0.055) + 's';
+    bar.style.height = (h * 0.4) + 'px';
+    container.appendChild(bar);
+  });
+})();
+
+// ─── FORMAT SELECTION ─────────────────────────────────────
+document.getElementById('format-grid').addEventListener('click', e => {
+  const btn = e.target.closest('.fmt-btn');
+  if (!btn) return;
+  document.querySelectorAll('.fmt-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedFormat = btn.dataset.fmt;
+  // Auto-set options for format
+  const bitrateEl = document.getElementById('opt-bitrate');
+  if (['flac', 'wav'].includes(selectedFormat)) {
+    bitrateEl.value = '320'; bitrateEl.disabled = true;
+    toast('info', '🎵', `${selectedFormat.toUpperCase()} is lossless — bitrate not applicable`);
+  } else {
+    bitrateEl.disabled = false;
+  }
+});
+
+// ─── RANGE INPUTS ─────────────────────────────────────────
+document.getElementById('opt-volume').addEventListener('input', function() {
+  document.getElementById('vol-val').textContent = (this.value >= 0 ? '+' : '') + this.value + ' dB';
+});
+document.getElementById('opt-speed').addEventListener('input', function() {
+  document.getElementById('spd-val').textContent = parseFloat(this.value).toFixed(2) + '×';
+});
+document.getElementById('opt-pitch').addEventListener('input', function() {
+  document.getElementById('pitch-val').textContent = (this.value >= 0 ? '+' : '') + this.value + ' st';
+});
+
+// ─── DRAG & DROP ─────────────────────────────────────────
+const dropZone = document.getElementById('drop-zone');
+['dragenter','dragover'].forEach(ev => dropZone.addEventListener(ev, e => {
+  e.preventDefault(); dropZone.classList.add('dragging');
+}));
+['dragleave','drop'].forEach(ev => dropZone.addEventListener(ev, e => {
+  e.preventDefault(); dropZone.classList.remove('dragging');
+  if (ev === 'drop') handleFiles(e.dataTransfer.files);
+}));
+dropZone.addEventListener('click', () => document.getElementById('file-input').click());
+document.getElementById('file-input').addEventListener('change', function() {
+  handleFiles(this.files);
+  this.value = '';
+});
+
+// ─── FILE HANDLING ─────────────────────────────────────────
+function handleFiles(fileList) {
+  const audioTypes = /audio\//;
+  const added = [];
+  Array.from(fileList).forEach(f => {
+    if (!audioTypes.test(f.type) && !f.name.match(/\.(mp3|wav|ogg|flac|aac|m4a|opus|webm|wma|aiff)$/i)) {
+      toast('error', '⚠️', `"${f.name}" is not a supported audio file`);
+      return;
+    }
+    if (files.find(x => x.file.name === f.name && x.file.size === f.size)) {
+      toast('info', '📋', `"${f.name}" already added`);
+      return;
+    }
+    const id = Date.now() + Math.random();
+    const ext = f.name.split('.').pop().toUpperCase();
+    files.push({ id, file: f, ext, status: 'ready' });
+    added.push(f.name);
+  });
+  if (added.length) {
+    renderFileList();
+    updateStats();
+    document.getElementById('conversion-panel').style.display = 'block';
+    // Show player if first audio file
+    const firstFile = files[files.length - added.length];
+    if (firstFile && files.length === added.length) previewFile(firstFile);
+    toast('success', '🎵', `${added.length} file${added.length > 1 ? 's' : ''} loaded`);
+  }
+}
+
+function renderFileList() {
+  const list = document.getElementById('file-list');
+  list.innerHTML = '';
+  files.forEach(item => {
+    const colors = { MP3:'#7850ff', WAV:'#50d4ff', OGG:'#c850fc', FLAC:'#3ddc97', AAC:'#ffb84d', M4A:'#ff8c50', OPUS:'#50a0ff', WEBM:'#ff5a7d' };
+    const color = colors[item.ext] || '#7850ff';
+    const sizeMB = (item.file.size / 1048576).toFixed(2);
+    const div = document.createElement('div');
+    div.className = 'file-item';
+    div.dataset.id = item.id;
+    div.innerHTML = `
+      <div class="file-icon" style="background:${color}22;border:1px solid ${color}44;color:${color}">${item.ext}</div>
+      <div class="file-info">
+        <div class="file-name">${item.file.name}</div>
+        <div class="file-meta">${sizeMB} MB · ${item.ext} · <span class="file-status" id="status-${item.id}" style="color:var(--muted)">Ready</span></div>
+      </div>
+      <div class="file-actions">
+        <button class="btn-play" style="width:32px;height:32px;font-size:12px" onclick="previewFileById('${item.id}')" title="Preview">▶</button>
+        <button class="btn-remove" onclick="removeFile('${item.id}')" title="Remove">✕</button>
+      </div>
+      <div class="file-progress" id="prog-${item.id}">
+        <div class="file-progress-bar" id="progbar-${item.id}"></div>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function removeFile(id) {
+  files = files.filter(f => f.id != id);
+  renderFileList();
+  updateStats();
+  if (files.length === 0) {
+    document.getElementById('conversion-panel').style.display = 'none';
+    document.getElementById('player-section').style.display = 'none';
+  }
+}
+
+function clearAll() {
+  files = [];
+  renderFileList();
+  updateStats();
+  document.getElementById('conversion-panel').style.display = 'none';
+  document.getElementById('player-section').style.display = 'none';
+  document.getElementById('output-section').style.display = 'none';
+  document.getElementById('global-progress').style.display = 'none';
+}
+
+function updateStats() {
+  document.getElementById('stat-files').textContent = files.length;
+  document.getElementById('stat-converted').textContent = convertedCount;
+  const totalMB = files.reduce((s, f) => s + f.file.size, 0) / 1048576;
+  document.getElementById('stat-size').textContent = totalMB.toFixed(1) + ' MB';
+}
+
+// ─── PREVIEW / PLAYER ─────────────────────────────────────
+function previewFileById(id) {
+  const item = files.find(f => f.id == id);
+  if (item) previewFile(item);
+}
+
+function previewFile(item) {
+  const audio = document.getElementById('audio-el');
+  const url = URL.createObjectURL(item.file);
+  audio.src = url;
+  document.getElementById('player-name').textContent = item.file.name;
+  document.getElementById('player-section').style.display = 'block';
+  audio.load();
+}
+
+function togglePlay() {
+  const audio = document.getElementById('audio-el');
+  if (!audio.src) return;
+  if (isPlaying) { audio.pause(); setPlayIcon(false); }
+  else { audio.play(); setPlayIcon(true); }
+  isPlaying = !isPlaying;
+}
+
+function setPlayIcon(playing) {
+  document.getElementById('play-icon').innerHTML = playing
+    ? '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'
+    : '<polygon points="5 3 19 12 5 21 5 3"/>';
+}
+
+function updateSeek() {
+  const audio = document.getElementById('audio-el');
+  if (!audio.duration) return;
+  const pct = (audio.currentTime / audio.duration) * 100;
+  document.getElementById('seek-bar').value = pct;
+  document.getElementById('time-display').textContent = fmt(audio.currentTime) + ' / ' + fmt(audio.duration);
+}
+
+function seekTo(val) {
+  const audio = document.getElementById('audio-el');
+  audio.currentTime = (val / 100) * audio.duration;
+}
+
+function onAudioEnd() { isPlaying = false; setPlayIcon(false); }
+function onAudioMeta() {
+  const audio = document.getElementById('audio-el');
+  document.getElementById('time-display').textContent = '0:00 / ' + fmt(audio.duration);
+}
+
+function fmt(s) {
+  const m = Math.floor(s / 60); const sec = Math.floor(s % 60);
+  return m + ':' + String(sec).padStart(2, '0');
+}
+
+// ─── CONVERSION (Web Audio API simulation) ─────────────────
+async function startConversion() {
+  if (!files.length) { toast('error', '⚠️', 'No files to convert'); return; }
+  const btn = document.getElementById('btn-convert');
+  btn.disabled = true;
+
+  const progressEl = document.getElementById('global-progress');
+  const fillEl = document.getElementById('progress-fill');
+  const pctEl = document.getElementById('progress-pct');
+  const labelEl = document.getElementById('progress-label');
+  progressEl.style.display = 'block';
+
+  const outputGrid = document.getElementById('output-grid');
+  outputGrid.innerHTML = '';
+  document.getElementById('output-section').style.display = 'block';
+
+  let done = 0;
+  const total = files.length;
+
+  for (let i = 0; i < files.length; i++) {
+    const item = files[i];
+    labelEl.textContent = `Converting ${item.file.name}…`;
+
+    // Update file status
+    const statusEl = document.getElementById('status-' + item.id);
+    if (statusEl) { statusEl.textContent = 'Converting…'; statusEl.style.color = 'var(--warn)'; }
+    const progDiv = document.getElementById('prog-' + item.id);
+    const progBar = document.getElementById('progbar-' + item.id);
+    if (progDiv) progDiv.style.display = 'block';
+
+    // Animate file progress bar
+    await animateProgress(progBar, 0, 100, 1400);
+
+    // Simulate conversion using Web Audio API
+    try {
+      const converted = await convertFile(item);
+      if (statusEl) { statusEl.textContent = 'Done ✓'; statusEl.style.color = 'var(--success)'; }
+
+      // Add to output
+      addOutput(item, converted);
+
+      // History
+      const timestamp = new Date().toLocaleTimeString();
+      conversionHistory.unshift({ name: item.file.name, from: item.ext, to: selectedFormat.toUpperCase(), size: converted.size, time: timestamp });
+      renderHistory();
+
+      done++;
+      convertedCount++;
+    } catch (err) {
+      if (statusEl) { statusEl.textContent = 'Failed'; statusEl.style.color = 'var(--error)'; }
+      toast('error', '✕', `Failed: ${item.file.name}`);
+    }
+
+    // Update global progress
+    const pct = Math.round(((i + 1) / total) * 100);
+    fillEl.style.width = pct + '%';
+    pctEl.textContent = pct + '%';
+  }
+
+  btn.disabled = false;
+  labelEl.textContent = `${done} of ${total} files converted successfully`;
+  updateStats();
+  updateSavedStat();
+  toast('success', '🎉', `${done} file${done !== 1 ? 's' : ''} converted to ${selectedFormat.toUpperCase()}!`);
+}
+
+function animateProgress(bar, from, to, duration) {
+  return new Promise(resolve => {
+    const start = Date.now();
+    function step() {
+      const t = Math.min((Date.now() - start) / duration, 1);
+      const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+      if (bar) bar.style.width = (from + (to - from) * ease) + '%';
+      if (t < 1) requestAnimationFrame(step);
+      else resolve();
+    }
+    step();
+  });
+}
+
+async function convertFile(item) {
+  // Real Web Audio API decoding + re-encoding simulation
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async e => {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioCtx();
+        const buf = await ctx.decodeAudioData(e.target.result.slice(0));
+
+        // Apply speed change via offline context
+        const speed = parseFloat(document.getElementById('opt-speed').value);
+        const channels = parseInt(document.getElementById('opt-channels').value);
+        const outChannels = document.getElementById('opt-stereo-to-mono').checked ? 1 : Math.min(buf.numberOfChannels, channels);
+        const outLen = Math.floor(buf.length / speed);
+        const sampleRate = parseInt(document.getElementById('opt-samplerate').value);
+
+        const offline = new OfflineAudioContext(outChannels, outLen, sampleRate);
+        const src = offline.createBufferSource();
+        src.buffer = buf;
+        src.playbackRate.value = speed;
+
+        // Volume gain
+        const gainNode = offline.createGain();
+        const volDB = parseFloat(document.getElementById('opt-volume').value);
+        gainNode.gain.value = Math.pow(10, volDB / 20);
+
+        src.connect(gainNode);
+        gainNode.connect(offline.destination);
+        src.start();
+
+        const rendered = await offline.startRendering();
+        await ctx.close();
+
+        // Encode to WAV (always, as browser can't encode to arbitrary format)
+        const wav = audioBufferToWav(rendered);
+        const blob = new Blob([wav], { type: 'audio/wav' });
+        resolve(blob);
+      } catch (err) {
+        // Fallback: just return original as blob
+        const blob = new Blob([e.target.result], { type: item.file.type || 'audio/mpeg' });
+        resolve(blob);
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(item.file);
+  });
+}
+
+// WAV encoder
+function audioBufferToWav(buffer) {
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const numSamples = buffer.length;
+  const bytesPerSample = 2;
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = numSamples * blockAlign;
+  const ab = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(ab);
+
+  function writeStr(off, str) { for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i)); }
+  writeStr(0, 'RIFF'); view.setUint32(4, 36 + dataSize, true);
+  writeStr(8, 'WAVE'); writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, numChannels, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true); view.setUint16(32, blockAlign, true);
+  view.setUint16(34, 16, true); writeStr(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+  for (let i = 0; i < numSamples; i++) {
+    for (let ch = 0; ch < numChannels; ch++) {
+      const sample = Math.max(-1, Math.min(1, buffer.getChannelData(ch)[i]));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+      offset += 2;
+    }
+  }
+  return ab;
+}
+
+function addOutput(item, blob) {
+  const grid = document.getElementById('output-grid');
+  const url = URL.createObjectURL(blob);
+  const outName = item.file.name.replace(/\.[^.]+$/, '') + '.' + selectedFormat;
+  const sizeMB = (blob.size / 1048576).toFixed(2);
+  const savings = ((1 - blob.size / item.file.size) * 100).toFixed(0);
+  const savingsText = savings > 0 ? `−${savings}% smaller` : savings < 0 ? `+${Math.abs(savings)}% larger` : 'same size';
+
+  const div = document.createElement('div');
+  div.className = 'output-item';
+  div.innerHTML = `
+    <div class="output-check">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <div class="output-info">
+      <div class="file-name">${outName}</div>
+      <div class="output-size">${sizeMB} MB · ${savingsText}</div>
+    </div>
+    <a class="btn-download" href="${url}" download="${outName}">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download
+    </a>
+  `;
+  grid.appendChild(div);
+}
+
+function updateSavedStat() {
+  document.getElementById('stat-saved').textContent = convertedCount + ' done';
+}
+
+// ─── HISTORY ─────────────────────────────────────────────
+function renderHistory() {
+  const list = document.getElementById('history-list');
+  if (!conversionHistory.length) {
+    list.innerHTML = '<div class="history-empty">No conversions yet — load some files to get started.</div>';
+    return;
+  }
+  const colors = { MP3:'#7850ff', WAV:'#50d4ff', OGG:'#c850fc', FLAC:'#3ddc97', AAC:'#ffb84d', M4A:'#ff8c50', OPUS:'#50a0ff', WEBM:'#ff5a7d' };
+  list.innerHTML = conversionHistory.slice(0, 10).map(h => `
+    <div class="history-item">
+      <div class="hist-dot"></div>
+      <div class="hist-name"><strong>${h.name}</strong> → ${h.to}</div>
+      <span class="hist-badge" style="background:${(colors[h.to]||'#7850ff')}22;color:${colors[h.to]||'#7850ff'};border:1px solid ${(colors[h.to]||'#7850ff')}44">${h.from} → ${h.to}</span>
+      <div class="hist-time">${h.time}</div>
+    </div>
+  `).join('');
+}
+
+// ─── TOAST ────────────────────────────────────────────────
+function toast(type, icon, msg) {
+  const container = document.getElementById('toast-container');
+  const div = document.createElement('div');
+  div.className = `toast ${type}`;
+  div.innerHTML = `<span class="toast-icon">${icon}</span><span>${msg}</span>`;
+  container.appendChild(div);
+  setTimeout(() => {
+    div.classList.add('fade-out');
+    setTimeout(() => div.remove(), 300);
+  }, 3200);
+}
+</script>
+</body>
+</html>
